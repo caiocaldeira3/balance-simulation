@@ -42,6 +42,15 @@ class Balance:
         self._expiry = expiry if expiry is not None else np.inf
         self._start_month = self.start_month if start_month is not None else 0
 
+        if isinstance(self.frequency_unit, str):
+            self.frequency_unit = FrequencyType(self.frequency_unit)
+
+        if isinstance(self.spread_type, str):
+            self.spread_type = SpreadType(self.spread_type)
+
+        if isinstance(self.type, str):
+            self.type = BalanceType(self.type)
+
     def to_csv (self) -> dict[str, str | float]:
         return {
             "id": self.id,

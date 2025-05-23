@@ -93,3 +93,10 @@ class BalanceHandler:
             return
 
         self.df = self.df[~self.df["id"].isin(balances_id)]
+
+    def query_balance_by_id (self, balance_id: str) -> Balance | None:
+        mask = self.df["id"] == balance_id
+        if mask.any():
+            return Balance(**self.df[mask].iloc[0].to_dict())
+
+        return None

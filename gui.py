@@ -1,15 +1,16 @@
 import sys
+import pandas as pd
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QPushButton, QVBoxLayout, QHBoxLayout, QGridLayout,
     QWidget, QLineEdit, QLabel, QMessageBox, QComboBox, QTextEdit, QGroupBox, QInputDialog
 )
 from datetime import datetime
 
-from matplotlib.dates import relativedelta
-from balance_handler import BalanceHandler, read_balance
-from structs.balance import Balance
-from structs.payment import PaymentStatus
 import config
+from matplotlib.dates import relativedelta
+from balance_handler import BalanceHandler
+from structs.balance import Balance, FrequencyType, SpreadType, BalanceType
+from structs.payment import PaymentStatus
 
 
 def simulate_payment (
@@ -74,6 +75,41 @@ class MainWindow(QMainWindow):
 
         main_layout = QVBoxLayout()
 
+        # --- Balance Input Form ---
+        form_layout = QGridLayout()
+        self.id_input = QLineEdit(self)
+        self.name_input = QLineEdit(self)
+        self.value_input = QLineEdit(self)
+        self.frequency_input = QLineEdit(self)
+        # Dropdowns for enums
+        self.frequency_unit_input = QComboBox(self)
+        self.frequency_unit_input.addItems([e.value for e in FrequencyType])
+        self.spread_type_input = QComboBox(self)
+        self.spread_type_input.addItems([e.value for e in SpreadType])
+        self.type_input = QComboBox(self)
+        self.type_input.addItems([e.value for e in BalanceType])
+        self.expiry_input = QLineEdit(self)
+        self.start_month_input = QLineEdit(self)
+        form_layout.addWidget(QLabel("ID:"), 0, 0)
+        form_layout.addWidget(self.id_input, 0, 1)
+        form_layout.addWidget(QLabel("Nome:"), 0, 2)
+        form_layout.addWidget(self.name_input, 0, 3)
+        form_layout.addWidget(QLabel("Valor:"), 1, 0)
+        form_layout.addWidget(self.value_input, 1, 1)
+        form_layout.addWidget(QLabel("Frequência:"), 1, 2)
+        form_layout.addWidget(self.frequency_input, 1, 3)
+        form_layout.addWidget(QLabel("Unidade de frequência:"), 2, 0)
+        form_layout.addWidget(self.frequency_unit_input, 2, 1)
+        form_layout.addWidget(QLabel("Tipo de spread:"), 2, 2)
+        form_layout.addWidget(self.spread_type_input, 2, 3)
+        form_layout.addWidget(QLabel("Expiração:"), 3, 0)
+        form_layout.addWidget(self.expiry_input, 3, 1)
+        form_layout.addWidget(QLabel("Mês de início:"), 3, 2)
+        form_layout.addWidget(self.start_month_input, 3, 3)
+        form_layout.addWidget(QLabel("Tipo:"), 4, 0)
+        form_layout.addWidget(self.type_input, 4, 1)
+        main_layout.addLayout(form_layout)
+
         # Balance Operations
         balance_ops_layout = QHBoxLayout()
         self.add_balance_button = QPushButton("Adicionar Despesa", self)
@@ -83,6 +119,10 @@ class MainWindow(QMainWindow):
         self.update_balance_button = QPushButton("Atualizar Despesa", self)
         self.update_balance_button.clicked.connect(self.update_balance)
         balance_ops_layout.addWidget(self.update_balance_button)
+
+        self.fetch_balance_button = QPushButton("Buscar Despesa", self)
+        self.fetch_balance_button.clicked.connect(self.fetch_balance)
+        balance_ops_layout.addWidget(self.fetch_balance_button)
 
         self.remove_balance_button = QPushButton("Remover Despesa", self)
         self.remove_balance_button.clicked.connect(self.remove_balance)
@@ -134,20 +174,59 @@ class MainWindow(QMainWindow):
         else:
             self.balances_display.setText(df.to_string(index=False))
 
+    def get_balance_from_form(self):
+        try:
+            id = self.id_input.text().strip()
+            name = self.name_input.text().strip()
+            value = float(self.value_input.text())
+            frequency = int(self.frequency_input.text())
+            frequency_unit = self.frequency_unit_input.currentText()
+            spread_type = self.spread_type_input.currentText()
+            expiry = self.expiry_input.text().strip()
+            start_month = self.start_month_input.text().strip()
+            start_month = int(start_month) if start_month else None
+            type_ = self.type_input.currentText()
+            return Balance(
+                id=id,
+                name=name,
+                value=value,
+                frequency=frequency,
+                frequency_unit=frequency_unit,
+                spread_type=spread_type,
+                expiry=expiry,
+                start_month=start_month,
+                type=type_
+            )
+        except Exception as e:
+            raise ValueError(f"Erro ao ler dados do formulário: {e}")
+
+    def clear_balance_form(self):
+        self.id_input.clear()
+        self.name_input.clear()
+        self.value_input.clear()
+        self.frequency_input.clear()
+        self.frequency_unit_input.setCurrentIndex(0)
+        self.spread_type_input.setCurrentIndex(0)
+        self.expiry_input.clear()
+        self.start_month_input.clear()
+        self.type_input.setCurrentIndex(0)
+
     def add_balance(self):
         try:
-            balance = read_balance()
+            balance = self.get_balance_from_form()
             self.handler.add_balances([balance])
             self.refresh_balances()
+            self.clear_balance_form()
             QMessageBox.information(self, "Sucesso", "Despesa adicionada com sucesso.")
         except Exception as e:
             QMessageBox.critical(self, "Erro", f"Falha ao adicionar despesa: {e}")
 
     def update_balance(self):
         try:
-            balance = read_balance()
+            balance = self.get_balance_from_form()
             self.handler.update_balances_by_id([balance])
             self.refresh_balances()
+            self.clear_balance_form()
             QMessageBox.information(self, "Sucesso", "Despesa atualizada com sucesso.")
         except Exception as e:
             QMessageBox.critical(self, "Erro", f"Falha ao atualizar despesa: {e}")
@@ -161,6 +240,27 @@ class MainWindow(QMainWindow):
                 QMessageBox.information(self, "Sucesso", "Despesa removida com sucesso.")
         except Exception as e:
             QMessageBox.critical(self, "Erro", f"Falha ao remover despesa: {e}")
+
+    def fetch_balance(self):
+        try:
+            balance_id, ok = QInputDialog.getText(self, "Buscar Despesa", "ID da despesa:")
+            if ok and balance_id:
+                balance = self.handler.query_balance_by_id(balance_id)
+                if balance:
+                    self.id_input.setText(str(balance.id))
+                    self.name_input.setText(str(balance.name))
+                    self.value_input.setText(str(balance.value))
+                    self.frequency_input.setText(str(balance.frequency))
+                    self.frequency_unit_input.setCurrentText(str(balance.frequency_unit))
+                    self.spread_type_input.setCurrentText(str(balance.spread_type))
+                    self.expiry_input.setText(str(balance.expiry))
+                    self.start_month_input.setText(str(balance.start_month) if balance.start_month is not None else "")
+                    self.type_input.setCurrentText(str(balance.type))
+                    QMessageBox.information(self, "Sucesso", "Despesa carregada no formulário.")
+                else:
+                    QMessageBox.warning(self, "Não encontrado", f"Despesa com ID {balance_id} não encontrada.")
+        except Exception as e:
+            QMessageBox.critical(self, "Erro", f"Falha ao buscar despesa: {e}")
 
     def simulate_payment(self):
         try:
