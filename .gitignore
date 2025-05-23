@@ -1,0 +1,4 @@
+.env
+balance.csv
+**/__pycache__/*
+
