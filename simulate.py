@@ -1,23 +1,15 @@
-import argparse
+import pprint
+import matplotlib.pyplot as plt
 from datetime import datetime
 from dateutil.relativedelta import relativedelta
 
 import config
-from structs.balance import Balance, SpreadType
+from structs.balance import Balance
 from structs.payment import PaymentStatus
-from balance_handler import BalanceHandler, read_balance
+from balance_handler import BalanceHandler
 
-def parse_arguments():
-    parser = argparse.ArgumentParser(description="Expense Manager")
 
-    parser.add_argument('--init', action='store_true', help='Initialize the balance file')
-    parser.add_argument('-a', type=int, help='Add `a` balance(s)')
-    parser.add_argument('-u', type=int, help='Update `u` balance(s)')
-    parser.add_argument('-d', type=int, help='Delete `d` balance(s)')
-
-    return parser.parse_args()
-
-def simulate_payment (
+def get_payment_status_list (
     handler: BalanceHandler, payment_size: float, investment_size: float, *,
     initial_payment: float = 0, profit_tax: float = 0.0,
     investment_yearly_percentage: float = 0,
@@ -64,20 +56,56 @@ def simulate_payment (
         payment_status.update_status(month_breakdown)
         simulation.append(payment_status.copy())
 
-        if simulation[-1].payment_size >= payment_status.payment_size:
-            return simulation
+        if simulation[-2].payment_size <= payment_status.payment_size:
+            break
 
         curr_date = curr_date + relativedelta(months=1)
         month_it += 1
 
+    return simulation
+
+def get_payment_simulation_plot (
+    handler: BalanceHandler, payment_size: float, investment_size: float, *,
+    initial_payment: float = 0, profit_tax: float = 0.0,
+    investment_yearly_percentage: float = 0,
+) -> plt.Figure:
+    payment_status = get_payment_status_list(
+        handler, payment_size, investment_size,
+        initial_payment=initial_payment,
+        profit_tax=profit_tax,
+        investment_yearly_percentage=investment_yearly_percentage,
+    )
+
+    # pp = pprint.PrettyPrinter(indent=2)
+    # # Convert each payment status to a dictionary for easier reading
+    # pretty_list = [s.__dict__ for s in payment_status]
+    # pp.pprint(pretty_list)
+
+    months = list(range(len(payment_status)))
+    payments = [s.payment_size for s in payment_status]
+    investments = [s.investment_size for s in payment_status]
+    net_credits = [s.total_breakdown.extra_credit for s in payment_status]
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.plot(months, payments, label="Pagamento", marker='o')
+    ax.plot(months, investments, label="Investimento", marker='o')
+    ax.plot(months, net_credits, label="Crédito Líquido", marker='o', linestyle='--')
+    ax.set_xlabel("Mês")
+    ax.set_ylabel("Valor")
+    ax.set_title("Evolução do Pagamento, Investimento e Crédito Líquido ao Longo do Tempo")
+    ax.legend()
+    ax.grid(True)
+    fig.tight_layout()
+
+    return fig
+
 if __name__ == "__main__":
-    args = parse_arguments()
-
     handler = BalanceHandler()
+    fig = get_payment_simulation_plot(
+        handler, config.DEBIT_SIZE, config.INVESTMENT_SIZE,
+        initial_payment=0.0,
+        profit_tax=0.0,
+        investment_yearly_percentage=0.0,
+    )
+    fig.show()
 
-    handler.add_balances([ read_balance() for _ in range(args.a or 0) ])
-    handler.update_balances_by_id([ read_balance() for _ in range(args.u or 0) ])
-    handler.remove_balances_by_id([ input("expense_id: ") for _ in range(args.d or 0) ])
-
-    # print(simulate_payment(config.DEBIT_SIZE, config.INVESTMENT_SIZE))
-
+    input()

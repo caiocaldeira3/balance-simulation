@@ -1,37 +1,9 @@
 import pandas as pd
 
 import config
-from structs.balance import Balance, BalanceType, FrequencyType, SpreadType
-from structs.payment import PaymentStatus
-from dateutil.relativedelta import relativedelta
+from structs.balance import Balance, SpreadType
 import dataclasses as dc
 
-
-def read_balance() -> Balance:
-    balance_id = input("Enter balance id: ")
-    name = input("Enter name: ")
-    value = float(input("Enter value: "))
-    frequency = int(input("Enter frequency: "))
-    frequency_unit = input("Enter frequency unit ({}): ".format(', '.join([e.value for e in FrequencyType]))),
-    spread_prompt = "Enter spread type ({}): ".format(', '.join([e.value for e in SpreadType]))
-    spread_type_str = input(spread_prompt)
-    expiry = input("Enter expiry month (or leave empty): ")
-    start_month_input = input("Enter start month (or leave empty): ")
-    start_month = int(start_month_input) if start_month_input else None
-    balance_type_prompt = "Enter balance type ({}): ".format(', '.join([e.value for e in BalanceType]))
-    balance_type_str = input(balance_type_prompt)
-
-    return Balance(
-        id=balance_id,
-        name=name,
-        value=value,
-        frequency=frequency,
-        frequency_unit=FrequencyType(frequency_unit),
-        spread_type=SpreadType(spread_type_str),
-        expiry=expiry,
-        start_month=start_month,
-        type=BalanceType(balance_type_str)
-    )
 
 @dc.dataclass(kw_only=True)
 class BalanceHandler:
@@ -54,19 +26,19 @@ class BalanceHandler:
 
     @property
     def monthly_balances_flag (self) -> pd.DataFrame:
-        return (self.df.spread_type == SpreadType.MONTHLY.value) & self.df.start_month.isna()
+        return (self.df.spread_type == SpreadType.MONTHLY.value) & self.df.start_month == 0
 
     @property
     def yearly_balances_flag (self) -> pd.DataFrame:
-        return (self.df.spread_type == SpreadType.YEARLY.value) & self.df.start_month.isna()
+        return (self.df.spread_type == SpreadType.YEARLY.value) & self.df.start_month == 0
 
     @property
     def inactive_monthly_balances_flag (self) -> pd.DataFrame:
-        return (self.df.spread_type == SpreadType.MONTHLY.value) & self.df.start_month.notna()
+        return (self.df.spread_type == SpreadType.MONTHLY.value) & self.df.start_month != 0
 
     @property
     def inactive_yearly_balances_flag (self) -> pd.DataFrame:
-        return (self.df.spread_type == SpreadType.YEARLY.value) & self.df.start_month.notna()
+        return (self.df.spread_type == SpreadType.YEARLY.value) & self.df.start_month != 0
 
     def add_balances (self, balances: list[Balance]) -> None:
         if len(balances) == 0:

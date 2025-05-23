@@ -80,6 +80,4 @@ class Balance:
 
     @property
     def balance_value (self) -> float:
-        return self.value * self.balance_ratio * (
-            -1 if self.type in [BalanceType.EXPENSE, BalanceType.PAYMENT] else 1
-        )
+        return self.value * self.balance_ratio

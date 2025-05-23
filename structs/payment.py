@@ -12,7 +12,7 @@ class FinancialBreakdown:
 
     def add_finance (self, balance: Balance) -> None:
         if balance.type is BalanceType.EXPENSE:
-            self.debit += Balance.balance_value
+            self.debit += balance.balance_value
 
         elif balance.type is BalanceType.CREDIT:
             self.credit += balance.balance_value
@@ -22,6 +22,10 @@ class FinancialBreakdown:
 
         elif balance.type is BalanceType.INVESTMENT:
             self.investment += balance.balance_value
+
+    @property
+    def extra_credit (self) -> float:
+        return self.credit - self.debit - self.payment - self.investment
 
     def __iadd__ (self, other: "FinancialBreakdown") -> "FinancialBreakdown":
         self.credit += other.credit
@@ -90,23 +94,23 @@ class PaymentStatus:
         return metric_breakdown
 
     @classmethod
-    def update_metric (cls, metric: list[Balance], occ: int) -> FinancialBreakdown:
+    def update_metric (cls, metric: list[Balance], occ: int, attr: str) -> FinancialBreakdown:
         metric_breakdown = FinancialBreakdown()
 
-        while len(metric) > 0 and occ == metric[-1][0]:
+        while len(metric) > 0 and occ == metric[-1].__getattribute__(attr):
             metric_breakdown.add_finance(metric.pop())
 
         return metric_breakdown
 
     def update_curr_year (self, new_year: int) -> None:
-        removal_breakdown = self.update_metric(self.yearly_balances, new_year)
-        activation_breakdown = self.update_metric(self.inactive_yearly_balances, new_year)
+        removal_breakdown = self.update_metric(self.yearly_balances, new_year, "_expiry")
+        activation_breakdown = self.update_metric(self.inactive_yearly_balances, new_year, "_start_month")
 
         self.yearly_breakdown += activation_breakdown - removal_breakdown
 
     def update_curr_month (self, new_month: int) -> None:
-        removal_breakdown = self.update_metric(self.monthly_balances, new_month)
-        activation_breakdown = self.update_metric(self.inactive_monthly_balances, new_month)
+        removal_breakdown = self.update_metric(self.monthly_balances, new_month, "_expiry")
+        activation_breakdown = self.update_metric(self.inactive_monthly_balances, new_month, "_start_month")
 
         self.monthly_breakdown += activation_breakdown - removal_breakdown
 
@@ -114,13 +118,13 @@ class PaymentStatus:
         self.payment_size -= total_breakdown.payment
         self.investment_size += total_breakdown.investment
 
-        self.total_breakdown = total_breakdown
+        self.total_breakdown = total_breakdown.copy()
 
     def make_yearly_payment (self, investment_percentage: float) -> None:
         self.investment_size -= self.investment_size * investment_percentage
 
     def copy (self) -> "PaymentStatus":
-        return PaymentStatus(
+        cpy = PaymentStatus(
             payment_size=self.payment_size,
             investment_size=self.investment_size,
             monthly_balances=self.monthly_balances.copy(),
@@ -128,3 +132,9 @@ class PaymentStatus:
             inactive_monthly_balances=self.inactive_monthly_balances.copy(),
             inactive_yearly_balances=self.inactive_yearly_balances.copy(),
         )
+
+        cpy.total_breakdown = self.total_breakdown.copy()
+        cpy.monthly_breakdown = self.monthly_breakdown.copy()
+        cpy.yearly_breakdown = self.yearly_breakdown.copy()
+
+        return cpy
