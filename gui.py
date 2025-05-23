@@ -304,6 +304,16 @@ class MainWindow(QMainWindow):
         except Exception as e:
             QMessageBox.critical(self, "Erro", f"Falha na simulação: {e}")
 
+    def closeEvent (self, event) -> None:
+        # Save the dataframe to balance.csv before exit
+        try:
+            self.handler.df.to_csv('balance.csv', index=False)
+
+        except Exception as e:
+            QMessageBox.warning(self, "Aviso", f"Falha ao salvar balance.csv: {e}")
+
+        event.accept()
+
 def main():
     app = QApplication.instance()
     app_created = False
