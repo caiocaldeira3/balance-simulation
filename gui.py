@@ -1,70 +1,15 @@
 import sys
-import pandas as pd
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QPushButton, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QWidget, QLineEdit, QLabel, QMessageBox, QComboBox, QTextEdit, QGroupBox, QInputDialog, QTableWidget, QTableWidgetItem
+    QWidget, QLineEdit, QLabel, QMessageBox, QComboBox, QTextEdit, QInputDialog,
+    QTableWidget, QTableWidgetItem
 )
-from datetime import datetime
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 
-import config
-from matplotlib.dates import relativedelta
 from balance_handler import BalanceHandler
 from structs.balance import Balance, FrequencyType, SpreadType, BalanceType
-from structs.payment import PaymentStatus
+from simulate import get_payment_simulation_plot
 
-
-def simulate_payment (
-    handler: BalanceHandler, payment_size: float, investment_size: float, *,
-    initial_payment: float = 0, profit_tax: float = 0.0,
-    investment_yearly_percentage: float = 0,
-) -> list[PaymentStatus]:
-    monthly_balances = handler.df[handler.monthly_balances_flag]
-    yearly_balances = handler.df[handler.yearly_balances_flag]
-    inactive_monthly_balances = handler.df[handler.inactive_monthly_balances_flag]
-    inactive_yearly_balances = handler.df[handler.inactive_yearly_balances_flag]
-
-    payment_status = PaymentStatus(
-        payment_size=payment_size - initial_payment,
-        investment_size=investment_size - initial_payment,
-        monthly_balances=[Balance(**row) for row in monthly_balances.to_dict(orient="records")],
-        yearly_balances=[Balance(**row) for row in yearly_balances.to_dict(orient="records")],
-        inactive_monthly_balances=[Balance(**row) for row in inactive_monthly_balances.to_dict(orient="records")],
-        inactive_yearly_balances=[Balance(**row) for row in inactive_yearly_balances.to_dict(orient="records")],
-    )
-
-    simulation = [payment_status.copy()]
-
-    month_it = 0
-    year_it = 0
-    curr_date = datetime.now()
-    while payment_status.payment_size > 0:
-        payment_status.payment_size += payment_status.payment_size * config.PAYMENT_INTEREST_RATE
-        investment_earnings = (
-            payment_status.investment_size * config.INVESTMENT_INTERST_RATE
-        )
-
-        payment_status.update_curr_month(month_it)
-
-        month_breakdown = payment_status.monthly_breakdown.copy()
-
-        if curr_date.month == 12:
-            month_breakdown += payment_status.yearly_breakdown
-            payment_status.make_yearly_payment(investment_yearly_percentage)
-
-            year_it += 1
-            payment_status.update_curr_year(year_it)
-
-        month_breakdown.debit += (investment_earnings + month_breakdown.credit) * profit_tax
-        month_breakdown.investment += investment_earnings
-
-        payment_status.update_status(month_breakdown)
-        simulation.append(payment_status.copy())
-
-        if simulation[-1].payment_size >= payment_status.payment_size:
-            return simulation
-
-        curr_date = curr_date + relativedelta(months=1)
-        month_it += 1
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -83,6 +28,7 @@ class MainWindow(QMainWindow):
         self.name_input = QLineEdit(self)
         self.value_input = QLineEdit(self)
         self.frequency_input = QLineEdit(self)
+
         # Dropdowns for enums
         self.frequency_unit_input = QComboBox(self)
         self.frequency_unit_input.addItems([e.value for e in FrequencyType])
@@ -197,27 +143,22 @@ class MainWindow(QMainWindow):
 
     def get_balance_from_form(self):
         try:
-            id = self.id_input.text().strip()
-            name = self.name_input.text().strip()
-            value = float(self.value_input.text())
-            frequency = float(self.frequency_input.text())
-            frequency_unit = self.frequency_unit_input.currentText()
-            spread_type = self.spread_type_input.currentText()
             expiry = self.expiry_input.text().strip()
+            expiry = int(expiry) if expiry else None
             start_month = self.start_month_input.text().strip()
             start_month = int(start_month) if start_month else None
-            type_ = self.type_input.currentText()
             return Balance(
-                id=id,
-                name=name,
-                value=value,
-                frequency=frequency,
-                frequency_unit=frequency_unit,
-                spread_type=spread_type,
+                id=self.id_input.text().strip(),
+                name=self.name_input.text().strip(),
+                value=float(self.value_input.text()),
+                frequency=float(self.frequency_input.text()),
+                frequency_unit=self.frequency_unit_input.currentText(),
+                spread_type=self.spread_type_input.currentText(),
                 expiry=expiry,
                 start_month=start_month,
-                type=type_
+                type=self.type_input.currentText()
             )
+
         except Exception as e:
             raise ValueError(f"Erro ao ler dados do formulário: {e}")
 
@@ -239,6 +180,7 @@ class MainWindow(QMainWindow):
             self.refresh_balances()
             self.clear_balance_form()
             QMessageBox.information(self, "Sucesso", "Despesa adicionada com sucesso.")
+
         except Exception as e:
             QMessageBox.critical(self, "Erro", f"Falha ao adicionar despesa: {e}")
 
@@ -249,6 +191,7 @@ class MainWindow(QMainWindow):
             self.refresh_balances()
             self.clear_balance_form()
             QMessageBox.information(self, "Sucesso", "Despesa atualizada com sucesso.")
+
         except Exception as e:
             QMessageBox.critical(self, "Erro", f"Falha ao atualizar despesa: {e}")
 
@@ -259,6 +202,7 @@ class MainWindow(QMainWindow):
                 self.handler.remove_balances_by_id([balance_id])
                 self.refresh_balances()
                 QMessageBox.information(self, "Sucesso", "Despesa removida com sucesso.")
+
         except Exception as e:
             QMessageBox.critical(self, "Erro", f"Falha ao remover despesa: {e}")
 
@@ -278,8 +222,10 @@ class MainWindow(QMainWindow):
                     self.start_month_input.setText(str(balance.start_month) if balance.start_month is not None else "")
                     self.type_input.setCurrentText(str(balance.type))
                     QMessageBox.information(self, "Sucesso", "Despesa carregada no formulário.")
+
                 else:
                     QMessageBox.warning(self, "Não encontrado", f"Despesa com ID {balance_id} não encontrada.")
+
         except Exception as e:
             QMessageBox.critical(self, "Erro", f"Falha ao buscar despesa: {e}")
 
@@ -290,17 +236,23 @@ class MainWindow(QMainWindow):
             initial_payment = float(self.initial_payment_input.text() or 0)
             profit_tax = float(self.profit_tax_input.text() or 0)
             investment_yearly = float(self.investment_yearly_input.text() or 0)
-            simulation = simulate_payment(
+            fig = get_payment_simulation_plot(
                 self.handler, payment_size, investment_size,
                 initial_payment=initial_payment,
                 profit_tax=profit_tax,
                 investment_yearly_percentage=investment_yearly
             )
-            result = "\n".join([
-                f"Mês {i}: Pagamento = {s.payment_size:.2f}, Investimento = {s.investment_size:.2f}"
-                for i, s in enumerate(simulation)
-            ])
-            self.simulation_display.setText(result)
+            # Remove previous canvas if exists
+            if hasattr(self, 'plot_canvas') and self.plot_canvas is not None:
+                self.simulation_display.layout().removeWidget(self.plot_canvas)
+                self.plot_canvas.setParent(None)
+                self.plot_canvas = None
+            # Clear text display
+            self.simulation_display.clear()
+            # Embed the matplotlib figure in the QTextEdit area
+            self.plot_canvas = FigureCanvas(fig)
+            layout = self.simulation_display.parentWidget().layout()
+            layout.addWidget(self.plot_canvas)
         except Exception as e:
             QMessageBox.critical(self, "Erro", f"Falha na simulação: {e}")
 
