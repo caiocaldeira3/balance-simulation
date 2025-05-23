@@ -2,7 +2,7 @@ import sys
 import pandas as pd
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QPushButton, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QWidget, QLineEdit, QLabel, QMessageBox, QComboBox, QTextEdit, QGroupBox, QInputDialog
+    QWidget, QLineEdit, QLabel, QMessageBox, QComboBox, QTextEdit, QGroupBox, QInputDialog, QTableWidget, QTableWidgetItem
 )
 from datetime import datetime
 
@@ -70,7 +70,9 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Expense Manager")
-        self.setGeometry(100, 100, 900, 600)
+        self.setGeometry(100, 100, 1150, 600)
+        self.setMinimumSize(900, 600)
+        self.setSizePolicy(QWidget.sizePolicy(self))
         self.handler = BalanceHandler()
 
         main_layout = QVBoxLayout()
@@ -131,9 +133,12 @@ class MainWindow(QMainWindow):
         main_layout.addLayout(balance_ops_layout)
 
         # Display Balances
-        self.balances_display = QTextEdit(self)
-        self.balances_display.setReadOnly(True)
-        main_layout.addWidget(self.balances_display)
+        self.balances_table = QTableWidget(self)
+        self.balances_table.setColumnCount(10)
+        self.balances_table.setHorizontalHeaderLabels([
+            "ID", "Nome", "Valor", "Frequência", "Unidade", "Spread", "Expiração", "Mês de início", "Tipo", ""
+        ])
+        main_layout.addWidget(self.balances_table)
 
         # Payment Simulation
         sim_layout = QGridLayout()
@@ -169,10 +174,24 @@ class MainWindow(QMainWindow):
 
     def refresh_balances(self):
         df = self.handler.df
+        self.balances_table.setRowCount(0)
         if df.empty:
-            self.balances_display.setText("Nenhuma despesa cadastrada.")
+            self.balances_table.setRowCount(1)
+            for col in range(self.balances_table.columnCount()):
+                self.balances_table.setItem(0, col, QTableWidgetItem(""))
         else:
-            self.balances_display.setText(df.to_string(index=False))
+            self.balances_table.setRowCount(len(df))
+            for row_idx, row in df.iterrows():
+                self.balances_table.setItem(row_idx, 0, QTableWidgetItem(str(row.get("id", ""))))
+                self.balances_table.setItem(row_idx, 1, QTableWidgetItem(str(row.get("name", ""))))
+                self.balances_table.setItem(row_idx, 2, QTableWidgetItem(str(row.get("value", ""))))
+                self.balances_table.setItem(row_idx, 3, QTableWidgetItem(str(row.get("frequency", ""))))
+                self.balances_table.setItem(row_idx, 4, QTableWidgetItem(str(row.get("frequency_unit", ""))))
+                self.balances_table.setItem(row_idx, 5, QTableWidgetItem(str(row.get("spread_type", ""))))
+                self.balances_table.setItem(row_idx, 6, QTableWidgetItem(str(row.get("expiry", ""))))
+                self.balances_table.setItem(row_idx, 7, QTableWidgetItem(str(row.get("start_month", ""))))
+                self.balances_table.setItem(row_idx, 8, QTableWidgetItem(str(row.get("type", ""))))
+                # 9th column left blank for future actions
 
     def get_balance_from_form(self):
         try:
